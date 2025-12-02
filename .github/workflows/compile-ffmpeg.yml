@@ -1,16 +1,43 @@
 name: 编译 ffmpeg（armv7 A5 + H.264）
 on:
   push:
-    branches: [ main ]  # 推送代码到 main 分支自动触发
+    branches: [ main ]  # 推送代码到你 fork 仓库的 main 分支自动触发
   workflow_dispatch:  # 手动触发（Actions 页面点「Run workflow」）
 
 jobs:
   compile-ffmpeg:
-    runs-on: ubuntu-22.04  # 兼容 LEDE 编译，稳定不报错
+    runs-on: ubuntu-22.04
     steps:
+      ###########################################################################
+      # 步骤 1：拉取「你自己 fork 的 LEDE 仓库」（自带你的 .config）
+      ###########################################################################
+      - name: 拉取自己 fork 的 LEDE 源码
+        uses: actions/checkout@v4
+        with:
+          repository: https://github.com/1396605285/lede  # 👉 必须改：替换为你的 fork 仓库地址（比如 user/lede）
+          fetch-depth: 1  # 只拉最新代码，加速
 
       ###########################################################################
-      # 步骤 2：安装 LEDE 编译依赖（Ubuntu 环境必装）
+      # 步骤 2：复制 .config 到仓库根目录（fork 仓库内直接找，无路径问题）
+      ###########################################################################
+      - name: 加载自定义 .config 配置
+        run: |
+          # 验证 .config 是否存在（输出日志，方便排查）
+          echo "=== 查看 fork 仓库的 configs 文件夹 ==="
+          ls -la configs/
+          
+          # 直接复制你上传的 .config 到仓库根目录（.config 是 LEDE 编译的默认配置文件）
+          if [ -f "configs/armv7-a5-ffmpeg.config" ]; then
+            cp configs/armv7-a5-ffmpeg.config .config
+            echo "✅ 成功加载 .config，配置预览："
+            head -10 .config  # 输出前 10 行，确认架构配置正确
+          else
+            echo "❌ 找不到 configs/armv7-a5-ffmpeg.config！"
+            exit 1
+          fi
+
+      ###########################################################################
+      # 步骤 3：安装编译依赖（不变）
       ###########################################################################
       - name: 安装编译依赖
         run: |
@@ -24,43 +51,58 @@ jobs:
           swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
 
       ###########################################################################
-      # 步骤 4：更新 feeds + 安装依赖（识别 libx264 和 ffmpeg）
+      # 步骤 4：替换国内源（加速下载，不变）
+      ###########################################################################
+      - name: 替换清华源加速
+        run: |
+          # 修改 feeds.conf.default 为清华源
+          cat > feeds.conf.default << EOF
+          src-git packages https://mirrors.tuna.tsinghua.edu.cn/git/openwrt/packages.git;openwrt-23.05
+          src-git luci https://mirrors.tuna.tsinghua.edu.cn/git/openwrt/luci.git;openwrt-23.05
+          src-git routing https://mirrors.tuna.tsinghua.edu.cn/git/openwrt/routing.git;openwrt-23.05
+          src-git telephony https://mirrors.tuna.tsinghua.edu.cn/git/openwrt/telephony.git;openwrt-23.05
+          src-git custom https://github.com/coolsnowwolf/packages.git
+          EOF
+          # 👉 注意：若你的 fork 仓库是 master 分支，把上面的 openwrt-23.05 改为 master
+
+          # 修改工具链下载源
+          sed -i 's|DOWNLOAD_URLS ?= .*|DOWNLOAD_URLS ?= https://mirrors.tuna.tsinghua.edu.cn/openwrt/releases/ https://downloads.openwrt.org/releases/|g' Makefile
+
+      ###########################################################################
+      # 步骤 5：更新 feeds + 安装依赖（不变）
       ###########################################################################
       - name: 更新并安装 feeds
         run: |
-          ./scripts/feeds update -a  # 更新 feeds 列表
-          ./scripts/feeds install -a  # 安装所有依赖（含 libx264）
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
       ###########################################################################
-      # 步骤 5：预下载依赖包（避免编译时超时，单线程稳定）
+      # 步骤 6：预下载依赖包（不变）
       ###########################################################################
       - name: 下载 ffmpeg 依赖包
         run: |
-          make download -j1 V=s  # -j1 单线程，V=s 显示日志，防止下载卡住
+          make download -j1 V=s
 
       ###########################################################################
-      # 步骤 6：单独编译 ffmpeg（只编译 ffmpeg，不编译全固件！）
+      # 步骤 7：单独编译 ffmpeg（不变）
       ###########################################################################
       - name: 编译 ffmpeg（armv7 A5 + H.264）
         run: |
-          # 清理 ffmpeg 和 libx264 旧缓存（避免配置冲突）
+          # 清理缓存
           make package/libx264/clean
           make package/ffmpeg/clean
-
-          # 单独编译 ffmpeg（自动先编译 libx264 依赖）
-          # -j2：Actions 免费版 CPU 只有 2 核，用 2 线程不崩溃
-          # V=s：显示详细编译日志，方便排查错误
+          
+          # 编译 ffmpeg（-j2 适配 Actions 免费版 CPU）
           make package/ffmpeg/compile V=s -j2
 
       ###########################################################################
-      # 步骤 7：上传编译好的 ffmpeg ipk 包（方便下载）
+      # 步骤 8：上传产物（不变）
       ###########################################################################
       - name: 上传 ffmpeg 产物
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-armv7-a5-h264  # 产物压缩包名称
+          name: ffmpeg-armv7-a5-h264
           path: |
-            # ffmpeg 的 ipk 包路径（armv7 架构固定路径）
-            lede-src/bin/packages/armv7/*/ffmpeg_*.ipk
-            lede-src/bin/packages/armv7/*/libx264_*.ipk  # 同时上传 libx264 依赖包
-          retention-days: 30  # 产物保留 30 天，过期自动删除
+            bin/packages/armv7/*/ffmpeg_*.ipk
+            bin/packages/armv7/*/libx264_*.ipk
+          retention-days: 30
