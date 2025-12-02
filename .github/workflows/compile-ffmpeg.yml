@@ -1,0 +1,79 @@
+name: 编译 ffmpeg（armv7 A5 + H.264）
+on:
+  push:
+    branches: [ main ]  # 推送代码到 main 分支自动触发
+  workflow_dispatch:  # 手动触发（Actions 页面点「Run workflow」）
+
+jobs:
+  compile-ffmpeg:
+    runs-on: ubuntu-22.04  # 兼容 LEDE 编译，稳定不报错
+    steps:
+      ###########################################################################
+      # 步骤 1：拉取 LEDE 源码 + 你的 .config 配置
+      ###########################################################################
+      - name: 拉取 LEDE 源码（coolsnowwolf/lede）
+        run: |
+          git clone --depth 1 https://github.com/coolsnowwolf/lede.git lede-src
+          cd lede-src
+          # 替换为你上传的 .config 路径（比如仓库根目录/configs/armv7-a5-ffmpeg.config）
+          # 若你的 .config 直接在仓库根目录，改为：cp ../armv7-a5-ffmpeg.config .config
+          cp ../configs/armv7-a5-ffmpeg.config .config
+
+      ###########################################################################
+      # 步骤 2：安装 LEDE 编译依赖（Ubuntu 环境必装）
+      ###########################################################################
+      - name: 安装编译依赖
+        run: |
+          sudo apt update -y && sudo apt full-upgrade -y
+          sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+          bzip2 ccache clang cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib gettext \
+          genisoimage git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev \
+          libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev \
+          libreadline-dev libssl-dev libtool llvm lrzsz libnsl-dev ninja-build p7zip p7zip-full patch pkgconf \
+          python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion \
+          swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+
+      ###########################################################################
+      # 步骤 4：更新 feeds + 安装依赖（识别 libx264 和 ffmpeg）
+      ###########################################################################
+      - name: 更新并安装 feeds
+        run: |
+          cd lede-src
+          ./scripts/feeds update -a  # 更新 feeds 列表
+          ./scripts/feeds install -a  # 安装所有依赖（含 libx264）
+
+      ###########################################################################
+      # 步骤 5：预下载依赖包（避免编译时超时，单线程稳定）
+      ###########################################################################
+      - name: 下载 ffmpeg 依赖包
+        run: |
+          cd lede-src
+          make download -j1 V=s  # -j1 单线程，V=s 显示日志，防止下载卡住
+
+      ###########################################################################
+      # 步骤 6：单独编译 ffmpeg（只编译 ffmpeg，不编译全固件！）
+      ###########################################################################
+      - name: 编译 ffmpeg（armv7 A5 + H.264）
+        run: |
+          cd lede-src
+          # 清理 ffmpeg 和 libx264 旧缓存（避免配置冲突）
+          make package/libx264/clean
+          make package/ffmpeg/clean
+
+          # 单独编译 ffmpeg（自动先编译 libx264 依赖）
+          # -j2：Actions 免费版 CPU 只有 2 核，用 2 线程不崩溃
+          # V=s：显示详细编译日志，方便排查错误
+          make package/ffmpeg/compile V=s -j2
+
+      ###########################################################################
+      # 步骤 7：上传编译好的 ffmpeg ipk 包（方便下载）
+      ###########################################################################
+      - name: 上传 ffmpeg 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-armv7-a5-h264  # 产物压缩包名称
+          path: |
+            # ffmpeg 的 ipk 包路径（armv7 架构固定路径）
+            lede-src/bin/packages/armv7/*/ffmpeg_*.ipk
+            lede-src/bin/packages/armv7/*/libx264_*.ipk  # 同时上传 libx264 依赖包
+          retention-days: 30  # 产物保留 30 天，过期自动删除
