@@ -17,7 +17,7 @@ jobs:
           cd lede-src
           # 替换为你上传的 .config 路径（比如仓库根目录/configs/armv7-a5-ffmpeg.config）
           # 若你的 .config 直接在仓库根目录，改为：cp ../armv7-a5-ffmpeg.config .config
-          cp ../configs/armv7-a5-ffmpeg.config .config
+          cp /configs/armv7-a5-ffmpeg.config .config
 
       ###########################################################################
       # 步骤 2：安装 LEDE 编译依赖（Ubuntu 环境必装）
