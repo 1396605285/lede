@@ -7,6 +7,9 @@ on:
 jobs:
   compile-ffmpeg:
     runs-on: ubuntu-22.04
+    env:
+      # 全局设置环境变量，允许 root 编译（解决 tar/gperf 等工具的报错）
+      FORCE_UNSAFE_CONFIGURE: 1
     steps:
       ###########################################################################
       # 步骤 1：拉取「你自己 fork 的 LEDE 仓库」（自带你的 .config）
