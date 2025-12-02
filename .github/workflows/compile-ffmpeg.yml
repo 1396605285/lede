@@ -28,7 +28,6 @@ jobs:
       ###########################################################################
       - name: 更新并安装 feeds
         run: |
-          cd lede-src
           ./scripts/feeds update -a  # 更新 feeds 列表
           ./scripts/feeds install -a  # 安装所有依赖（含 libx264）
 
@@ -37,7 +36,6 @@ jobs:
       ###########################################################################
       - name: 下载 ffmpeg 依赖包
         run: |
-          cd lede-src
           make download -j1 V=s  # -j1 单线程，V=s 显示日志，防止下载卡住
 
       ###########################################################################
@@ -45,7 +43,6 @@ jobs:
       ###########################################################################
       - name: 编译 ffmpeg（armv7 A5 + H.264）
         run: |
-          cd lede-src
           # 清理 ffmpeg 和 libx264 旧缓存（避免配置冲突）
           make package/libx264/clean
           make package/ffmpeg/clean
