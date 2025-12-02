@@ -14,6 +14,7 @@ jobs:
       - name: 拉取 LEDE 源码（coolsnowwolf/lede）
         run: |
           git clone --depth 1 https://github.com/coolsnowwolf/lede.git lede-src
+          cd /
           ls -la
           cd lede-src
           ls -la
