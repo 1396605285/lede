@@ -14,7 +14,9 @@ jobs:
       - name: 拉取 LEDE 源码（coolsnowwolf/lede）
         run: |
           git clone --depth 1 https://github.com/coolsnowwolf/lede.git lede-src
+          ls -la
           cd lede-src
+          ls -la
           # 替换为你上传的 .config 路径（比如仓库根目录/configs/armv7-a5-ffmpeg.config）
           # 若你的 .config 直接在仓库根目录，改为：cp ../armv7-a5-ffmpeg.config .config
           cp ../blob/master/configs/armv7-a5-ffmpeg.config .config
